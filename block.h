@@ -5,6 +5,7 @@ typedef struct Block {
 	int pos_x;
 	int pos_y;
 	int pos_z;
+	int block_type;
 } Block;
 
 #endif
