@@ -8,14 +8,19 @@ Chunk** memory_chunks;
 int memory_chunks_x = 0;
 int memory_chunks_y = 0;
 
-int render_bounds_p1_x;
-int render_bounds_p1_y;
-int render_bounds_p2_x;
-int render_bounds_p2_y;
-int render_begin_x;
-int render_begin_y;
-int view_point_x;
-int view_point_y;
+#define NO_BLOCK 0xA 
+#define CHUNK_MIN_VERTEX_COUNT 100
+
+enum BlockCorner {
+	LEFT_FRONT_BOTTOM = 0,
+	RIGHT_FRONT_BOTTOM = 1,
+	LEFT_FRONT_TOP = 2,
+	RIGHT_FRONT_TOP = 3,
+	LEFT_BACK_BOTTOM = 4,
+	RIGHT_BACK_BOTTOM = 5,
+	LEFT_BACK_TOP = 6,
+	RIGHT_BACK_TOP = 7,
+};
 
 void init_chunks() {
 	memory_chunks = malloc(2 * VIEW_DISTANCE * sizeof(Chunk*));
@@ -24,9 +29,68 @@ void init_chunks() {
 	memory_chunks_y = 2 * VIEW_DISTANCE - 1;
 }
 
+static struct BlockVertex gen_vertex(int x, int y, int z, int type, enum BlockCorner vertex_pos) {
+	struct BlockVertex ret = {.pos_x = x, .pos_y = y, .pos_z = z, .type = (int)type,
+		.vertex_position = vertex_pos};
+	return ret;
+}
+
+static void move_vertex_limit(Chunk *c, int vertex_count) {
+	if(vertex_count >= CHUNK_MIN_VERTEX_COUNT) {
+		c->mesh.vertices = realloc(c->mesh.vertices, (vertex_count + 1)	* sizeof(struct BlockVertex));
+	}								
+}
+
+
+static void gen_mesh(Chunk *chunk) {
+	chunk->mesh.vertices = malloc(CHUNK_MIN_VERTEX_COUNT * sizeof(struct BlockVertex));
+	int vertex_count = 0;
+	for(int z = 0; z < chunk->chunk_height; ++z) {
+		for(int x = 0; x < 16; ++x) {
+			for(int y = 0; y < 16; ++y) {
+				if(y == 0 || chunk->layers[z].blocks[x - 1][y].is_air) {
+					/* Render the left face */
+					vertex_count += 4;
+					move_vertex_limit(chunk, vertex_count);
+					chunk->mesh.vertices[vertex_count - 4] = gen_vertex(x, z, y, 0, LEFT_FRONT_BOTTOM); 
+					chunk->mesh.vertices[vertex_count - 4] = gen_vertex(x, z, y, 0, LEFT_BACK_BOTTOM); 
+					chunk->mesh.vertices[vertex_count - 4] = gen_vertex(x, z, y, 0, LEFT_FRONT_TOP); 
+					chunk->mesh.vertices[vertex_count - 4] = gen_vertex(x, z, y, 0, LEFT_BACK_TOP); 
+				}
+				if(x == 0 || chunk->layers[z].blocks[x][y - 1].is_air) {
+					/* Render the back face */
+					vertex_count += 4;
+					move_vertex_limit(chunk, vertex_count);
+					chunk->mesh.vertices[vertex_count - 4] = gen_vertex(x, z, y, 0, LEFT_FRONT_BOTTOM); 
+					chunk->mesh.vertices[vertex_count - 4] = gen_vertex(x, z, y, 0, RIGHT_FRONT_BOTTOM); 
+					chunk->mesh.vertices[vertex_count - 4] = gen_vertex(x, z, y, 0, LEFT_FRONT_TOP); 
+					chunk->mesh.vertices[vertex_count - 4] = gen_vertex(x, z, y, 0, RIGHT_FRONT_TOP); 
+
+				}
+				if(z != 0 || chunk->layers[z - 1].blocks[x][y].is_air) {	
+					/* Generate Bottom face */
+					vertex_count += 4;
+					move_vertex_limit(chunk, vertex_count);
+					chunk->mesh.vertices[vertex_count - 4] = gen_vertex(x, z, y, 0, LEFT_FRONT_BOTTOM); 
+					chunk->mesh.vertices[vertex_count - 4] = gen_vertex(x, z, y, 0, RIGHT_FRONT_BOTTOM); 
+					chunk->mesh.vertices[vertex_count - 4] = gen_vertex(x, z, y, 0, LEFT_BACK_BOTTOM); 
+					chunk->mesh.vertices[vertex_count - 4] = gen_vertex(x, z, y, 0, RIGHT_BACK_BOTTOM); 
+
+				}
+			}
+		}
+	}
+}
+
+void update_player(int pos_x, int pos_y, int pos_z, int view_angle,
+		int camera_target_x, int camera_target_y, int camera_target_z) {
+
+}
+
 void add_to_chunk_list(Chunk chunk, int pos_x, int pos_y) {
 	if(pos_y > memory_chunks_y) {
 		memory_chunks = realloc(memory_chunks, 2 * pos_y * sizeof(Chunk*));
+		memory_chunks_y = 2 * pos_y - 1;
 	}
 
 	if(pos_x > memory_chunks_x) {
@@ -34,98 +98,22 @@ void add_to_chunk_list(Chunk chunk, int pos_x, int pos_y) {
 			memory_chunks[i] = realloc(memory_chunks[i],
 					2 * pos_x * sizeof(Chunk));
 		}
+		memory_chunks_x = 2 * pos_x - 1;
 	}
 	memory_chunks[pos_x][pos_y] = chunk;
-}
-
-
-static int check_if_in_bounds(int x, int y) {
-	/* Checks if a block is in render bounds */
-	if(x >= render_bounds_p1_x && x <= view_point_x) return 1;
-	if(x <= render_bounds_p1_x && x >= view_point_x) return 1;
-	if(y <= render_bounds_p2_y && x >= view_point_y) return 1;
-	if(y >= render_bounds_p2_y && x <= view_point_y) return 1;
-	return 0;
-}
-
-static void regenerate_chunk_mesh(int x, int y) {
-	Chunk chunk = memory_chunks[x][y];
-	int min_height = 100;
-	int max_height = 0;
-	for(int i = 0; i < 16; ++i) {
-		for(int j = 0; j < 16; ++j) {
-			int height = chunk.height_map[i][j];
-			if(height < min_height) min_height = height;
-			if(height > max_height) max_height = height;
-		}
-	}
-	chunk.surface_mesh.vertices = realloc(chunk.surface_mesh.vertices,
-			sizeof(struct Vertex) * 6 * (max_height - min_height) + 1);
-}
-
-void update_player(int pos_x, int pos_y, int pos_z, int view_angle,
-		int camera_target_x, int camera_target_y, int camera_target_z) {
-	/* This function checks which chunks are visible*/
-	int player_chunk_pos_x = pos_x / 16;
-	int player_chunk_pos_y = pos_y / 16;
-	
-	/* Camera target is a direction vector normalized to a length of one.
-	 * We normalize it to the view distance. */
-	float normalized_x = 0;
-	float normalized_y = 0;
-	normalized_x = player_chunk_pos_x + VIEW_DISTANCE * camera_target_x;
-	normalized_y = player_chunk_pos_y + VIEW_DISTANCE * camera_target_y;
-	
-	float normalized_length = sqrtf(powf(normalized_x, 2) + powf(normalized_y, 2));
-	float offset = sqrtf(powf(cosf(view_angle / 2.0f) * normalized_length, 2) - 
-			powf(normalized_x, 2));
-
-	render_bounds_p1_x = normalized_x;
-	render_bounds_p2_y = normalized_y;
-	if(normalized_y < 0.0f) {
-		render_bounds_p1_y = normalized_y + offset;
-	} else {
-		render_bounds_p1_y = normalized_y - offset;
-	}
-	if(normalized_x < 0.0f) {
-		render_bounds_p2_x = normalized_x + offset;
-	} else {
-		render_bounds_p2_y = normalized_x - offset;
-	}
-	render_begin_x = player_chunk_pos_x;
-	render_begin_y = player_chunk_pos_y;
-
-	view_point_x = normalized_x;
-	view_point_y = normalized_y;
-
-	/* The slope of the two functions */
-	float pos1f_m = (render_bounds_p1_y - player_chunk_pos_y) /
-		(render_bounds_p1_x - player_chunk_pos_x);
-	float pos2f_m = (render_bounds_p2_y - player_chunk_pos_y) /
-		(render_bounds_p2_x - player_chunk_pos_x);
-
-	/* Iterate over each chunk of the P1 function, get all the chunks on the line
-	 * to the P2 function, generate the chunk mesh for each */
-	int x = player_chunk_pos_x;
-	int y = player_chunk_pos_y;
-	int i = 0;
-	do {
-		y = player_chunk_pos_x + i * pos1f_m;
-		int y_bound = player_chunk_pos_y + i * pos2f_m;
-		if(y_bound > y) {
-			for(int j = y; j <= y_bound; ++j) {
-				regenerate_chunk_mesh(i, j);
-			}
-		} else {
-			for(int j = y; j >= y_bound; --j) {
-				regenerate_chunk_mesh(i, j);
-			}
-		}
-		++x;
-	} while(check_if_in_bounds(x, y));
+	gen_mesh(&memory_chunks[pos_x][pos_y]);
 }
 
 void render_chunks() {
 
 }
 
+void free_chunks() {
+	for(int i = 0; i <=  memory_chunks_y; ++i) {
+		for(int j = 0; j < memory_chunks_x; ++j) {
+			free(memory_chunks[memory_chunks_x][memory_chunks_y].mesh.vertices);
+		}	
+		free(memory_chunks[i]);
+	}
+	free(memory_chunks);
+}
