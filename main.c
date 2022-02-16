@@ -9,7 +9,6 @@
 #include <unistd.h>
 #endif
 
-#include "world.h"
 #include "input_handling.h"
 
 #define RENDER_TICK_SPEED 60
@@ -34,8 +33,6 @@ void check_thread_creation_error(int status) {
 }
 
 void* compute_loop(void *arg) {
-	pthread_join(init_thread, (void*)0);
-	
 	int compute_timer = glfwGetTime();
 	int old_timer = glfwGetTime();
 
@@ -59,20 +56,39 @@ void* compute_loop(void *arg) {
 void* render_loop(void* arg) {
 	pthread_join(init_thread, (void*)0);
 	
-	int render_timer = glfwGetTime();
-	int old_timer = glfwGetTime();
+	glfwInit();
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 4);	
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+	game_window = glfwCreateWindow(1920, 1080, "Barbaria", glfwGetPrimaryMonitor(), (void*)0);
+	if(game_window == (void*)0) {
+		printf("Could not create GLFW game window\n");
+		close_game = 1;
+	}
+	glViewport(0, 0, 1920, 1080);
+	glfwMakeContextCurrent(game_window);
+
+	glewExperimental = 1;
+	if(glewInit() != GLEW_OK) {
+		close_game = 1;
+		return (void*)-1;
+	}
+	glfwSetTime(0);
+
+	double render_timer = glfwGetTime();
+	double old_timer = glfwGetTime();
 
 	float render_intervall = 1.0 / RENDER_TICK_SPEED;
 	float thread_sleep_time = (render_intervall / 2.0) * 1000;
-
+	
 	while(1) {
-		if(render_timer >= render_intervall) {
-			glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
+		if((render_timer - old_timer) >= render_intervall) {
+			glClearColor(0.5f, 0.2f, 0.3f, 1.0f);
 			glClear(GL_COLOR_BUFFER_BIT);
 			glfwSwapBuffers(game_window);
 			old_timer += render_intervall;
 		}
-		render_timer = glfwGetTime() - old_timer;
+		render_timer = glfwGetTime();
 #ifdef _WIN32
 		Sleep(thread_sleep_time);
 #else
@@ -83,7 +99,6 @@ void* render_loop(void* arg) {
 }
 
 void* input_loop(void* arg) {
-	pthread_join(init_thread, (void*)0);
 	int input_timer = glfwGetTime();
 	int old_timer = glfwGetTime();
 
@@ -114,24 +129,6 @@ void* input_loop(void* arg) {
 }
 
 void* start_game(void* arg) {
-	glfwInit();
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 4);	
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-	game_window = glfwCreateWindow(1920, 1080, "Barbaria", glfwGetPrimaryMonitor(), (void*)0);
-	if(game_window == (void*)0) {
-		printf("Could not create GLFW game window\n");
-		close_game = 1;
-	}
-	glViewport(0, 0, 1920, 1080);
-	glfwMakeContextCurrent(game_window);
-
-	glewExperimental = 1;
-	if(glewInit() != GLEW_OK) {
-		close_game = 1;
-		return (void*)-1;
-	}
-	glfwSetTime(0);
 	pthread_exit((void*)0);
 	return (void*)0;
 }

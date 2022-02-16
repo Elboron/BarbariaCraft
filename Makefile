@@ -8,14 +8,10 @@ BIN = barbaria
 
 OBJ =\
 	 main.o\
-	 world.o\
-	 chunk.o\
 	 input_handling.o
 
 SRC =\
 	main.c\
-	world.c\
-	chunk.c\
 	input_handling.c
 
 LDFLAGS = -lGL -lGLEW -lglfw -lm -pthread
