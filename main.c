@@ -53,27 +53,13 @@ void* compute_loop(void *arg) {
 	return (void*)0;
 }
 
-void* render_loop(void* arg) {
-	pthread_join(init_thread, (void*)0);
-	
-	glfwInit();
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 4);	
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-	game_window = glfwCreateWindow(1920, 1080, "Barbaria", glfwGetPrimaryMonitor(), (void*)0);
-	if(game_window == (void*)0) {
-		printf("Could not create GLFW game window\n");
-		close_game = 1;
-	}
-	glViewport(0, 0, 1920, 1080);
+void* render_loop(void* arg) {	
 	glfwMakeContextCurrent(game_window);
-
 	glewExperimental = 1;
 	if(glewInit() != GLEW_OK) {
 		close_game = 1;
 		return (void*)-1;
 	}
-	glfwSetTime(0);
 
 	double render_timer = glfwGetTime();
 	double old_timer = glfwGetTime();
@@ -99,17 +85,18 @@ void* render_loop(void* arg) {
 }
 
 void* input_loop(void* arg) {
-	int input_timer = glfwGetTime();
-	int old_timer = glfwGetTime();
+	double input_timer = glfwGetTime();
+	double old_timer = glfwGetTime();
 
 	float input_intervall = 1.0 / INPUT_TICK_SPEED;
 	float thread_sleep_time = (input_intervall / 2.0) * 1000;
 
 	while(1) {
-		if(input_timer >= input_intervall) {
+		if((input_timer - old_timer) >= input_intervall) {
 			pthread_mutex_lock(&game_window_mutex);
+			glfwPollEvents();
 			int input_status = 0;
-			handle_input(game_window);
+			input_status = handle_input(game_window);
 			if(input_status == -1) {
 				pthread_mutex_lock(&close_game_mutex);
 				close_game = 1;
@@ -118,7 +105,7 @@ void* input_loop(void* arg) {
 			pthread_mutex_unlock(&game_window_mutex);
 			old_timer += input_intervall;
 		}
-		input_timer = glfwGetTime() - old_timer;
+		input_timer = glfwGetTime();
 #ifdef _WIN32
 		Sleep(thread_sleep_time);
 #else
@@ -128,23 +115,25 @@ void* input_loop(void* arg) {
 	return (void*)0;
 }
 
-void* start_game(void* arg) {
-	pthread_exit((void*)0);
-	return (void*)0;
-}
 
 int main() {
+	glfwInit();
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 4);	
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+	game_window = glfwCreateWindow(1920, 1080, "Barbaria", glfwGetPrimaryMonitor(), (void*)0);
+	if(game_window == (void*)0) {
+		printf("Could not create GLFW game window\n");
+		close_game = 1;
+	}
+	glViewport(0, 0, 1920, 1080);
+	glfwSetTime(0);
+
 	pthread_t render_thread;
 	pthread_t calculate_thread;
 	pthread_t input_thread;
 
 	int status = 0;
-
-	status = pthread_create(&init_thread, (void*)0, &start_game, (void*)0);
-	if(status != 0) {
-		printf("Could not create init thread\n");
-		check_thread_creation_error(status);
-	}
 
 	/* Start the compute loop thread */
 	status = pthread_create(&calculate_thread, (void*)0, &compute_loop, (void*)0);
