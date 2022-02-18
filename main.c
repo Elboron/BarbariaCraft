@@ -10,6 +10,7 @@
 #endif
 
 #include "input_handling.h"
+#include "path_generator.h"
 
 #define RENDER_TICK_SPEED 60
 #define INPUT_TICK_SPEED 30
@@ -117,6 +118,10 @@ void* input_loop(void* arg) {
 
 
 int main() {
+	gen_base_path();
+	char* path = get_path("test", TEXTURE, BLOCK);
+	printf("P: %s\n", path);
+	free_path();
 	glfwInit();
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 4);	
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
