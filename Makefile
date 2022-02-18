@@ -9,12 +9,14 @@ BIN = barbaria
 OBJ =\
 	 main.o\
 	 input_handling.o\
-	 path_generator.o
+	 path_generator.o\
+	 gui.o
 
 SRC =\
 	main.c\
 	input_handling.c\
-	path_generator.c
+	path_generator.c\
+	gui.c
 
 LDFLAGS = -lGL -lGLEW -lglfw -lm -pthread
 
